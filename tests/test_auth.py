@@ -185,3 +185,9 @@ def test_development_fallbacks():
     settings = Settings(_env_file=None, environment="development", allowed_netids="", device_tokens="")
     assert settings.get_allowed_netids() == {"dev"}
     assert "dev-token-rpi-bridge-01" in settings.get_valid_device_tokens()
+
+
+@pytest.mark.parametrize("raw", ["{not json", "[1, 2]", "\"text\""])
+def test_malformed_login_body_is_400(client, raw):
+    response = client.post("/auth/login", content=raw, headers={"content-type": "application/json"})
+    assert response.status_code == 400

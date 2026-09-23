@@ -54,10 +54,12 @@ async def login(request: Request):
     Returns JWT access token.
     """
     content_type = request.headers.get("content-type", "")
-    if content_type.startswith("application/json"):
-        body = await request.json()
-    else:
-        body = await request.form()
+    try:
+        body = await request.json() if content_type.startswith("application/json") else await request.form()
+    except ValueError:
+        body = None
+    if not hasattr(body, "get"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed login request")
     username = body.get("username")
     password = body.get("password")
 
