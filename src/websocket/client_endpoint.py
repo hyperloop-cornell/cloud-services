@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import WebSocket, WebSocketDisconnect, Query, status
 from pydantic import ValidationError
@@ -26,7 +26,7 @@ PING_INTERVAL = 30
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 async def send_periodic_pings(connection_id: str, username: str):

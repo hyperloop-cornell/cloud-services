@@ -377,3 +377,16 @@ def test_invalid_telemetry_does_not_drop_connection(client, operator_headers):
         assert eventually(lambda: port_ids(client, operator_headers) == ["port-9"])
     finally:
         ws.__exit__(None, None, None)
+
+
+def test_timestamps_are_utc_aware(client, operator_headers):
+    """Browsers parse offset-less ISO strings as local time; every timestamp must carry UTC."""
+    ws, _ = connect_hub(client)
+    try:
+        hub = hubs_by_id(client, operator_headers)[HUB_ID]
+        assert hub["connectedAt"].endswith(("Z", "+00:00"))
+        assert hub["lastSeen"].endswith(("Z", "+00:00"))
+        res = client.post(f"/api/hubs/{HUB_ID}/commands/restart", json={"portId": "p"}, headers=operator_headers)
+        assert res.json()["created_at"].endswith(("Z", "+00:00"))
+    finally:
+        ws.__exit__(None, None, None)

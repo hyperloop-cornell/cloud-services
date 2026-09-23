@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -192,7 +192,7 @@ async def _dispatch_command(
 
     logger.info(f"Command {command_id} {command_type} -> {hub_id}:{port_id} by {user.get('username')}")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return TaskStatusResponse(
         task_id=command_id,
         status="pending",
