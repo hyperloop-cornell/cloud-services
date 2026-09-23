@@ -1,150 +1,84 @@
-"""Authentication service with JWT and mock users."""
+"""Authentication: NetID allowlist + shared team password, JWT sessions, device tokens."""
 
-from datetime import datetime, timedelta
-from typing import Optional
+import hmac
 import logging
-import jwt
+from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+from typing import Optional
+
 import bcrypt
-import json
-from pathlib import Path
+import jwt
 from fastapi import HTTPException, status
 
-from ..config import get_settings
+from ..config import DEV_TEAM_PASSWORD, get_settings, normalize_netid
 
 logger = logging.getLogger(__name__)
 
+ROLE_OPERATOR = "operator"
+ROLE_VIEWER = "viewer"
+VIEWER_SUBJECT = "viewer"
 
-# User database loaded from JSON file
-# Fallback demo users for development if file not found
-DEMO_USERS = {
-    "admin": {
-        "username": "admin",
-        "email": "admin@example.com",
-        "full_name": "Admin User",
-        "hashed_password": "$2b$12$Bsq66/d3TpJAm88m7pUDjOKt9d.zDWL//Ndo.M75MB8U.HUnf28Ue",  # admin123
-    },
-    "developer": {
-        "username": "developer",
-        "email": "dev@example.com",
-        "full_name": "Developer User",
-        "hashed_password": "$2b$12$3zeCNtJ3l7jPngfCu0ehsOEpr0.0nk2eInMVIXZNfVA5YVmRG5xG.",  # dev123
-    },
-}
 
-_users_cache = None
+@lru_cache(maxsize=1)
+def _dev_password_hash() -> bytes:
+    return bcrypt.hashpw(DEV_TEAM_PASSWORD.encode("utf-8"), bcrypt.gensalt())
 
-def load_users() -> dict:
-    """Load users from JSON file or return demo users."""
-    global _users_cache
-    
-    if _users_cache is not None:
-        return _users_cache
-    
+
+def _team_password_hash() -> bytes:
     settings = get_settings()
-    users_file = Path(settings.users_file_path)
-    
-    if users_file.exists():
-        try:
-            logger.info(f"Loading users from {users_file}")
-            with open(users_file, 'r') as f:
-                data = json.load(f)
-                # Handle both raw dict and wrapped format from generator
-                if "MOCK_USERS" in data:
-                    _users_cache = data["MOCK_USERS"]
-                else:
-                    _users_cache = data
-                logger.info(f"Loaded {len(_users_cache)} users from file")
-                return _users_cache
-        except Exception as e:
-            logger.error(f"Error loading users from {users_file}: {e}")
-            if settings.environment == "production":
-                logger.error("Production mode: refusing to fall back to demo users")
-                raise RuntimeError("Cannot load users file in production")
-            logger.warning("Falling back to demo users")
-            _users_cache = DEMO_USERS
-            return _users_cache
-    else:
-        logger.warning(f"Users file not found at {users_file}")
-        if settings.environment == "production":
-            logger.error("Production mode: demo users are disabled")
-            raise RuntimeError("Users file required in production")
-        logger.warning("Using demo users (admin/developer)")
-        _users_cache = DEMO_USERS
-        return _users_cache
+    if settings.team_password_hash:
+        return settings.team_password_hash.encode("utf-8")
+    if settings.is_production:
+        # validate_for_environment() stops startup before this can happen
+        raise RuntimeError("TEAM_PASSWORD_HASH is not configured")
+    return _dev_password_hash()
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash."""
-    logger.debug("[VERIFY] Verifying password")
-    
-    # Truncate password to 72 bytes to comply with bcrypt limitations
-    password_bytes = plain_password.encode('utf-8')[:72]
-    hashed_bytes = hashed_password.encode('utf-8')
-    
+def verify_team_password(plain_password: str) -> bool:
+    """Check a password against the team hash (bcrypt only considers the first 72 bytes)."""
     try:
-        result = bcrypt.checkpw(password_bytes, hashed_bytes)
-        logger.info(f"[VERIFY] Verification {'success' if result else 'failure'}")
-        return result
-    except Exception as e:
-        logger.error(f"[VERIFY] Verification error: {e}")
+        return bcrypt.checkpw(plain_password.encode("utf-8")[:72], _team_password_hash())
+    except ValueError as e:
+        logger.error(f"Team password hash is malformed: {e}")
         return False
 
 
-def get_user(username: str) -> Optional[dict]:
-    """Get user from database."""
-    users = load_users()
-    return users.get(username)
+def is_allowed_netid(netid: str) -> bool:
+    return normalize_netid(netid) in get_settings().get_allowed_netids()
 
 
 def authenticate_user(username: str, password: str) -> Optional[dict]:
-    """Authenticate user with username and password."""
-    logger.info(f"[AUTH] Authenticating user: {username}")
-    
-    user = get_user(username)
-    if not user:
-        logger.error(f"[AUTH] User not found: {username}")
-        users = load_users()
-        logger.info(f"[AUTH] Available users: {list(users.keys())}")
+    """Return the user for a valid NetID + team password, else None."""
+    netid = normalize_netid(username)
+    # Always run bcrypt so response time does not reveal whether the NetID is allowed
+    password_ok = verify_team_password(password)
+    if not is_allowed_netid(netid) or not password_ok:
         return None
-    
-    logger.info(f"[AUTH] User found: {username}")
-    logger.debug("[AUTH] Stored password hash present")
-    
-    if not verify_password(password, user["hashed_password"]):
-        logger.error(f"[AUTH] Password verification failed for user: {username}")
-        return None
-    
-    logger.info(f"[AUTH] Password verified successfully for user: {username}")
-    return user
+    return build_user(netid, ROLE_OPERATOR)
+
+
+def build_user(username: str, role: str) -> dict:
+    if role == ROLE_VIEWER:
+        return {"username": VIEWER_SUBJECT, "email": None, "full_name": "View-Only User", "role": ROLE_VIEWER}
+    return {"username": username, "email": f"{username}@cornell.edu", "full_name": None, "role": role}
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create JWT access token."""
     settings = get_settings()
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=settings.jwt_access_token_expire_minutes))
+
     to_encode = data.copy()
-
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.jwt_access_token_expire_minutes
-        )
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
-    )
-    return encoded_jwt
+    to_encode.update({"exp": expire, "iat": now})
+    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def decode_access_token(token: str) -> dict:
     """Decode and verify JWT access token."""
     settings = get_settings()
     try:
-        payload = jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-        )
-        return payload
+        return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -157,19 +91,30 @@ def decode_access_token(token: str) -> dict:
         )
 
 
+def user_from_token_payload(payload: dict) -> Optional[dict]:
+    """Resolve a decoded token to a user, or None if it is no longer valid.
+
+    Operator tokens are re-checked against the allowlist so removing a NetID
+    revokes that person's existing sessions immediately.
+    """
+    username = payload.get("sub")
+    role = payload.get("role")
+    if not username:
+        return None
+    if role == ROLE_VIEWER and username == VIEWER_SUBJECT:
+        return build_user(VIEWER_SUBJECT, ROLE_VIEWER)
+    if role == ROLE_OPERATOR and is_allowed_netid(username):
+        return build_user(username, ROLE_OPERATOR)
+    return None
+
+
 def verify_device_token(device_token: str) -> Optional[str]:
     """Verify device token and return hub ID."""
-    settings = get_settings()
-    valid_tokens = settings.get_valid_device_tokens()
-    
-    # Debug logging
-    logger.info(f"Verifying device token: {device_token[:10]}...")
-    logger.info(f"Valid tokens: {list(valid_tokens.keys())}")
-    
-    hub_id = valid_tokens.get(device_token)
-    if hub_id:
-        logger.info(f"Token verified successfully for hub: {hub_id}")
-    else:
-        logger.warning(f"Token verification failed. Token not found in valid_tokens")
-    
+    if not device_token:
+        return None
+    candidate = device_token.encode("utf-8")
+    hub_id = None
+    for token, token_hub_id in get_settings().get_valid_device_tokens().items():
+        if hmac.compare_digest(candidate, token.encode("utf-8")):
+            hub_id = token_hub_id
     return hub_id

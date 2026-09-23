@@ -24,8 +24,11 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Configure CORS
+# Refuse to start production with missing or development credentials
 settings = get_settings()
+settings.validate_for_environment()
+
+# Configure CORS
 logger.info(f"CORS origins configured: {settings.cors_origins}")
 app.add_middleware(
     CORSMiddleware,
@@ -82,7 +85,7 @@ if __name__ == "__main__":
     
     logger.info(f"Starting Cloud Service on {settings.host}:{settings.port}")
     logger.info(f"WebSocket endpoint: ws://{settings.host}:{settings.port}/hub")
-    logger.info(f"Valid device tokens: {list(settings.get_valid_device_tokens().values())}")
+    logger.info(f"Known hubs: {sorted(set(settings.get_valid_device_tokens().values()))}")
     logger.info(f"Environment: {settings.environment}")
 
     uvicorn.run(

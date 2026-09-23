@@ -1,6 +1,6 @@
 """Integration tests for API endpoints."""
 
-import pytest
+from conftest import OPERATOR_NETID, TEAM_PASSWORD
 
 
 def test_health_endpoint_returns_200(client):
@@ -14,7 +14,7 @@ def test_auth_flow(client):
     # Test login
     login_response = client.post(
         "/auth/login",
-        json={"username": "admin", "password": "admin123"}
+        json={"username": OPERATOR_NETID, "password": TEAM_PASSWORD}
     )
     assert login_response.status_code == 200
     
@@ -32,7 +32,7 @@ def test_list_hubs_requires_auth(client):
     # With valid token should work or return empty list
     login_response = client.post(
         "/auth/login",
-        json={"username": "admin", "password": "admin123"}
+        json={"username": OPERATOR_NETID, "password": TEAM_PASSWORD}
     )
     
     if login_response.status_code == 200:
