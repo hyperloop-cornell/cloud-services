@@ -1,54 +1,72 @@
 """Hub management API endpoints."""
 
+import logging
 import uuid
-import base64
 from datetime import datetime
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import Any, Dict, List, Optional
 
-from ..models import (
-    HubListResponse,
-    HubInfo,
-    TelemetryListResponse,
-    TelemetryEntry,
-    PortListResponse,
-    PortInfo,
-    ConnectionListResponse,
-    ConnectionInfo,
-    SerialWriteRequest,
-    FlashFirmwareRequest,
-    RestartDeviceRequest,
-    CloseConnectionRequest,
-    CommandResponse,
-    TaskStatusResponse,
-)
+from fastapi import APIRouter, Depends, HTTPException, Query
+
 from ..auth.dependencies import get_current_user, require_operator
-from ..storage.memory_store import get_store
+from ..config import get_settings
+from ..models import (
+    CloseConnectionRequest,
+    ConnectionInfo,
+    ConnectionListResponse,
+    FlashFirmwareRequest,
+    HubInfo,
+    PortInfo,
+    PortListResponse,
+    RestartDeviceRequest,
+    SerialWriteRequest,
+    TaskStatusResponse,
+    TelemetryEntry,
+    TelemetryListResponse,
+)
+from ..protocol.bench_v1 import HubProfile
 from ..services.command_service import send_command_to_hub
+from ..storage.memory_store import HubRecord, get_store
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/hubs", tags=["hubs"])
+
+
+def _known_hub_ids() -> set:
+    return set(get_settings().get_valid_device_tokens().values())
+
+
+def _hub_info(hub_id: str, record: Optional[HubRecord]) -> HubInfo:
+    if record is None:
+        return HubInfo(hubId=hub_id, connected=False)
+    return HubInfo(
+        hubId=hub_id,
+        connected=record.connected,
+        connectedAt=record.connected_at if record.connected else None,
+        lastSeen=record.last_seen,
+        version=record.version,
+        capabilities=record.capabilities,
+        profile=HubProfile(**record.profile) if record.profile else None,
+    )
+
+
+async def _require_known_hub(hub_id: str) -> Optional[HubRecord]:
+    """Return the hub's record (None if it never connected); 404 for unknown hubs."""
+    records = await get_store().get_hub_records()
+    if hub_id not in records and hub_id not in _known_hub_ids():
+        raise HTTPException(status_code=404, detail=f"Hub not found: {hub_id}")
+    return records.get(hub_id)
 
 
 @router.get("", response_model=List[HubInfo])
 async def list_hubs(current_user: dict = Depends(get_current_user)):
     """
-    List all connected hubs (returns a list of HubInfo).
+    List every configured hub (from DEVICE_TOKENS) plus any hub seen since startup,
+    with its connection state.
     """
-    store = get_store()
-    hubs = await store.get_all_hubs()
-
-    hub_infos = [
-        HubInfo(
-            hubId=hub.hub_id,
-            connected=True,
-            connectedAt=hub.connected_at,
-            lastSeen=hub.last_seen,
-            version=hub.version,
-        )
-        for hub in hubs
-    ]
-
-    return hub_infos
+    records = await get_store().get_hub_records()
+    hub_ids = sorted(_known_hub_ids() | set(records))
+    return [_hub_info(hub_id, records.get(hub_id)) for hub_id in hub_ids]
 
 
 @router.get("/{hub_id}", response_model=HubInfo)
@@ -56,19 +74,7 @@ async def get_hub(hub_id: str, current_user: dict = Depends(get_current_user)):
     """
     Get hub details.
     """
-    store = get_store()
-    hub = await store.get_hub_connection(hub_id)
-
-    if not hub:
-        raise HTTPException(status_code=404, detail=f"Hub not found: {hub_id}")
-
-    return HubInfo(
-        hubId=hub.hub_id,
-        connected=True,
-        connectedAt=hub.connected_at,
-        lastSeen=hub.last_seen,
-        version=hub.version,
-    )
+    return _hub_info(hub_id, await _require_known_hub(hub_id))
 
 
 @router.get("/{hub_id}/telemetry", response_model=TelemetryListResponse)
@@ -78,15 +84,10 @@ async def get_telemetry(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Get telemetry data for hub.
+    Get recent telemetry for a hub (kept after the hub disconnects).
     """
+    await _require_known_hub(hub_id)
     store = get_store()
-
-    # Check if hub exists
-    if not await store.is_hub_connected(hub_id):
-        raise HTTPException(status_code=404, detail=f"Hub not found: {hub_id}")
-
-    # Get telemetry
     telemetry_data = await store.get_telemetry(hub_id, limit=limit)
     stats = await store.get_telemetry_stats(hub_id)
 
@@ -115,35 +116,26 @@ async def get_ports(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Get ports for hub.
+    Get ports for a hub. Offline hubs report no ports.
     """
-    store = get_store()
+    record = await _require_known_hub(hub_id)
+    ports: List[PortInfo] = []
+    if record and record.connected:
+        ports = [
+            PortInfo(
+                port_id=port.port_id,
+                port=port.port,
+                description=port.description,
+                manufacturer=port.manufacturer,
+                serial_number=port.serial_number,
+                vendor_id=port.vendor_id,
+                product_id=port.product_id,
+                board_profile=port.board_profile,
+            )
+            for port in await get_store().get_ports(hub_id)
+        ]
 
-    # Check if hub exists
-    if not await store.is_hub_connected(hub_id):
-        raise HTTPException(status_code=404, detail=f"Hub not found: {hub_id}")
-
-    # Get ports
-    ports_data = await store.get_ports(hub_id)
-
-    ports = [
-        PortInfo(
-            port_id=port.port_id,
-            port=port.port,
-            description=port.description,
-            manufacturer=port.manufacturer,
-            serial_number=port.serial_number,
-            vendor_id=port.vendor_id,
-            product_id=port.product_id,
-        )
-        for port in ports_data
-    ]
-
-    return PortListResponse(
-        hubId=hub_id,
-        ports=ports,
-        count=len(ports),
-    )
+    return PortListResponse(hubId=hub_id, ports=ports, count=len(ports))
 
 
 @router.get("/{hub_id}/connections", response_model=ConnectionListResponse)
@@ -152,34 +144,64 @@ async def get_connections(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Get connections for hub.
+    Get open serial connections for a hub. Offline hubs report none.
     """
+    record = await _require_known_hub(hub_id)
+    connections: List[ConnectionInfo] = []
+    if record and record.connected:
+        connections = [
+            ConnectionInfo(
+                port_id=conn.port_id,
+                status=conn.status,
+                baud_rate=conn.baud_rate,
+                session_id=conn.session_id,
+                bytes_read=conn.bytes_read,
+                bytes_written=conn.bytes_written,
+                connected_at=conn.connected_at,
+            )
+            for conn in await get_store().get_connections(hub_id)
+        ]
+
+    return ConnectionListResponse(hubId=hub_id, connections=connections, count=len(connections))
+
+
+async def _dispatch_command(
+    hub_id: str,
+    command_type: str,
+    port_id: str,
+    params: Dict[str, Any],
+    priority: int,
+    user: dict,
+) -> TaskStatusResponse:
+    """Send a command to a connected hub and return its initial (pending) task status."""
     store = get_store()
-
-    # Check if hub exists
     if not await store.is_hub_connected(hub_id):
-        raise HTTPException(status_code=404, detail=f"Hub not found: {hub_id}")
+        raise HTTPException(status_code=404, detail=f"Hub not connected: {hub_id}")
 
-    # Get connections
-    connections_data = await store.get_connections(hub_id)
+    command_id = f"cmd-{uuid.uuid4()}"
+    command = {
+        "commandId": command_id,
+        "commandType": command_type,
+        "portId": port_id,
+        "params": params,
+        "priority": priority,
+    }
 
-    connections = [
-        ConnectionInfo(
-            port_id=conn.port_id,
-            status=conn.status,
-            baud_rate=conn.baud_rate,
-            session_id=conn.session_id,
-            bytes_read=conn.bytes_read,
-            bytes_written=conn.bytes_written,
-            connected_at=conn.connected_at,
-        )
-        for conn in connections_data
-    ]
+    if not await send_command_to_hub(hub_id, command):
+        raise HTTPException(status_code=500, detail="Failed to send command to hub")
 
-    return ConnectionListResponse(
-        hubId=hub_id,
-        connections=connections,
-        count=len(connections),
+    logger.info(f"Command {command_id} {command_type} -> {hub_id}:{port_id} by {user.get('username')}")
+
+    now = datetime.utcnow()
+    return TaskStatusResponse(
+        task_id=command_id,
+        status="pending",
+        timestamp=now,
+        command_type=command_type,
+        port_id=port_id,
+        hub_id=hub_id,
+        priority=priority,
+        created_at=now,
     )
 
 
@@ -192,42 +214,13 @@ async def send_serial_write_command(
     """
     Send serial write command to hub.
     """
-    store = get_store()
-
-    # Check if hub is connected
-    if not await store.is_hub_connected(hub_id):
-        raise HTTPException(status_code=404, detail=f"Hub not connected: {hub_id}")
-
-    # Generate command ID
-    command_id = f"cmd-{uuid.uuid4()}"
-
-    # Prepare command
-    command = {
-        "commandId": command_id,
-        "commandType": "serial_write",
-        "portId": request.portId,
-        "params": {
-            "data": request.data,
-            "encoding": request.encoding,
-        },
-        "priority": request.priority,
-    }
-
-    # Send command
-    success = await send_command_to_hub(hub_id, command)
-
-    if not success:
-        raise HTTPException(
-            status_code=500, detail="Failed to send command to hub"
-        )
-
-    return TaskStatusResponse(
-        task_id=command_id,
-        status="pending",
-        progress=None,
-        result=None,
-        error=None,
-        timestamp=datetime.utcnow(),
+    return await _dispatch_command(
+        hub_id,
+        "serial_write",
+        request.portId,
+        {"data": request.data, "encoding": request.encoding},
+        request.priority,
+        current_user,
     )
 
 
@@ -240,43 +233,13 @@ async def send_flash_firmware_command(
     """
     Send flash firmware command to hub.
     """
-    store = get_store()
+    params: Dict[str, Any] = {"firmwareData": request.firmwareData, "boardFqbn": request.boardFqbn}
+    if request.artifactFormat:
+        params["artifactFormat"] = request.artifactFormat
+    if request.boardProfile:
+        params["boardProfile"] = request.boardProfile
 
-    # Check if hub is connected
-    if not await store.is_hub_connected(hub_id):
-        raise HTTPException(status_code=404, detail=f"Hub not connected: {hub_id}")
-
-    # Generate command ID
-    command_id = f"cmd-{uuid.uuid4()}"
-
-    # Prepare command
-    command = {
-        "commandId": command_id,
-        "commandType": "flash",
-        "portId": request.portId,
-        "params": {
-            "firmwareData": request.firmwareData,
-            "boardFqbn": request.boardFqbn,
-        },
-        "priority": request.priority,
-    }
-
-    # Send command
-    success = await send_command_to_hub(hub_id, command)
-
-    if not success:
-        raise HTTPException(
-            status_code=500, detail="Failed to send command to hub"
-        )
-
-    return TaskStatusResponse(
-        task_id=command_id,
-        status="pending",
-        progress=None,
-        result=None,
-        error=None,
-        timestamp=datetime.utcnow(),
-    )
+    return await _dispatch_command(hub_id, "flash", request.portId, params, request.priority, current_user)
 
 
 @router.post("/{hub_id}/commands/restart", response_model=TaskStatusResponse)
@@ -288,40 +251,7 @@ async def send_restart_device_command(
     """
     Send restart device command to hub.
     """
-    store = get_store()
-
-    # Check if hub is connected
-    if not await store.is_hub_connected(hub_id):
-        raise HTTPException(status_code=404, detail=f"Hub not connected: {hub_id}")
-
-    # Generate command ID
-    command_id = f"cmd-{uuid.uuid4()}"
-
-    # Prepare command
-    command = {
-        "commandId": command_id,
-        "commandType": "restart",
-        "portId": request.portId,
-        "params": {},
-        "priority": request.priority,
-    }
-
-    # Send command
-    success = await send_command_to_hub(hub_id, command)
-
-    if not success:
-        raise HTTPException(
-            status_code=500, detail="Failed to send command to hub"
-        )
-
-    return TaskStatusResponse(
-        task_id=command_id,
-        status="pending",
-        progress=None,
-        result=None,
-        error=None,
-        timestamp=datetime.utcnow(),
-    )
+    return await _dispatch_command(hub_id, "restart", request.portId, {}, request.priority, current_user)
 
 
 @router.post("/{hub_id}/commands/close", response_model=TaskStatusResponse)
@@ -333,37 +263,4 @@ async def send_close_connection_command(
     """
     Send close connection command to hub.
     """
-    store = get_store()
-
-    # Check if hub is connected
-    if not await store.is_hub_connected(hub_id):
-        raise HTTPException(status_code=404, detail=f"Hub not connected: {hub_id}")
-
-    # Generate command ID
-    command_id = f"cmd-{uuid.uuid4()}"
-
-    # Prepare command
-    command = {
-        "commandId": command_id,
-        "commandType": "close_connection",
-        "portId": request.portId,
-        "params": {},
-        "priority": request.priority,
-    }
-
-    # Send command
-    success = await send_command_to_hub(hub_id, command)
-
-    if not success:
-        raise HTTPException(
-            status_code=500, detail="Failed to send command to hub"
-        )
-
-    return TaskStatusResponse(
-        task_id=command_id,
-        status="pending",
-        progress=None,
-        result=None,
-        error=None,
-        timestamp=datetime.utcnow(),
-    )
+    return await _dispatch_command(hub_id, "close_connection", request.portId, {}, request.priority, current_user)

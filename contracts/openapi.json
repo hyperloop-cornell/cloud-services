@@ -1,0 +1,2291 @@
+{
+  "components": {
+    "schemas": {
+      "BoardProfileInfo": {
+        "description": "Board resolved by the hub from the USB VID/PID registry (config/boards.yaml).",
+        "properties": {
+          "artifacts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          },
+          "fqbn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fqbn"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "BoardProfileInfo",
+        "type": "object"
+      },
+      "CloseConnectionRequest": {
+        "description": "Request to close a connection.",
+        "properties": {
+          "portId": {
+            "description": "Target port ID",
+            "title": "Portid",
+            "type": "string"
+          },
+          "priority": {
+            "default": 1,
+            "description": "Command priority",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "portId"
+        ],
+        "title": "CloseConnectionRequest",
+        "type": "object"
+      },
+      "Command": {
+        "description": "Command details.",
+        "properties": {
+          "commandId": {
+            "title": "Commandid",
+            "type": "string"
+          },
+          "commandType": {
+            "title": "Commandtype",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "portId": {
+            "title": "Portid",
+            "type": "string"
+          },
+          "priority": {
+            "default": 5,
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "commandId",
+          "commandType",
+          "portId",
+          "params",
+          "priority"
+        ],
+        "title": "Command",
+        "type": "object"
+      },
+      "CommandEnvelope": {
+        "description": "Command envelope sent to hub.",
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/Command"
+          },
+          "type": {
+            "const": "command",
+            "default": "command",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "command"
+        ],
+        "title": "CommandEnvelope",
+        "type": "object"
+      },
+      "ConnectedMessage": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "connected",
+            "default": "connected",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "message",
+          "timestamp"
+        ],
+        "title": "ConnectedMessage",
+        "type": "object"
+      },
+      "ConnectionInfo": {
+        "description": "Connection information.",
+        "properties": {
+          "baud_rate": {
+            "title": "Baud Rate",
+            "type": "integer"
+          },
+          "bytes_read": {
+            "title": "Bytes Read",
+            "type": "integer"
+          },
+          "bytes_written": {
+            "title": "Bytes Written",
+            "type": "integer"
+          },
+          "connected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected At"
+          },
+          "port_id": {
+            "title": "Port Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "port_id",
+          "status",
+          "baud_rate",
+          "session_id",
+          "bytes_read",
+          "bytes_written"
+        ],
+        "title": "ConnectionInfo",
+        "type": "object"
+      },
+      "ConnectionListResponse": {
+        "description": "List of connections.",
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectionInfo"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hubId",
+          "connections",
+          "count"
+        ],
+        "title": "ConnectionListResponse",
+        "type": "object"
+      },
+      "DeviceEventBroadcast": {
+        "properties": {
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "portId": {
+            "title": "Portid",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "device_event",
+            "default": "device_event",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "hubId",
+          "portId",
+          "timestamp",
+          "event"
+        ],
+        "title": "DeviceEventBroadcast",
+        "type": "object"
+      },
+      "DeviceEventMessage": {
+        "description": "Device event from hub.",
+        "properties": {
+          "deviceInfo": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Deviceinfo"
+          },
+          "eventType": {
+            "title": "Eventtype",
+            "type": "string"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "portId": {
+            "title": "Portid",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "default": "device_event",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hubId",
+          "timestamp",
+          "eventType",
+          "portId"
+        ],
+        "title": "DeviceEventMessage",
+        "type": "object"
+      },
+      "DeviceSubscription": {
+        "properties": {
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "portId": {
+            "title": "Portid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hubId",
+          "portId"
+        ],
+        "title": "DeviceSubscription",
+        "type": "object"
+      },
+      "FlashFirmwareRequest": {
+        "description": "Request to send flash firmware command.",
+        "properties": {
+          "artifactFormat": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ino",
+                  "hex",
+                  "bin",
+                  "elf"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Firmware format; inferred as ino/hex when omitted (older hubs only accept those)",
+            "title": "Artifactformat"
+          },
+          "boardFqbn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Board FQBN (required for .ino source)",
+            "title": "Boardfqbn"
+          },
+          "boardProfile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Board profile id from the hub's board registry",
+            "title": "Boardprofile"
+          },
+          "firmwareData": {
+            "description": "Base64 encoded firmware (.ino source, .hex, .bin or .elf)",
+            "title": "Firmwaredata",
+            "type": "string"
+          },
+          "portId": {
+            "description": "Target port ID",
+            "title": "Portid",
+            "type": "string"
+          },
+          "priority": {
+            "default": 3,
+            "description": "Command priority",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "portId",
+          "firmwareData"
+        ],
+        "title": "FlashFirmwareRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthBroadcast": {
+        "properties": {
+          "cpu_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cpu Percent"
+          },
+          "disk_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Disk Percent"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "memory_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Memory Percent"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Mode"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "health",
+            "default": "health",
+            "title": "Type",
+            "type": "string"
+          },
+          "uplink": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Uplink"
+          }
+        },
+        "required": [
+          "type",
+          "hubId",
+          "timestamp",
+          "cpu_percent",
+          "memory_percent",
+          "disk_percent",
+          "mode",
+          "uplink"
+        ],
+        "title": "HealthBroadcast",
+        "type": "object"
+      },
+      "HealthMessage": {
+        "description": "Health metrics from hub.",
+        "properties": {
+          "errors": {
+            "additionalProperties": true,
+            "title": "Errors",
+            "type": "object"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "service": {
+            "additionalProperties": true,
+            "title": "Service",
+            "type": "object"
+          },
+          "system": {
+            "additionalProperties": true,
+            "title": "System",
+            "type": "object"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "default": "health",
+            "title": "Type",
+            "type": "string"
+          },
+          "uplink": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Uplink"
+          },
+          "uptime_seconds": {
+            "title": "Uptime Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hubId",
+          "timestamp",
+          "uptime_seconds",
+          "system",
+          "service",
+          "errors"
+        ],
+        "title": "HealthMessage",
+        "type": "object"
+      },
+      "HubConnectedAck": {
+        "properties": {
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "hub_connected",
+            "default": "hub_connected",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "hubId",
+          "timestamp"
+        ],
+        "title": "HubConnectedAck",
+        "type": "object"
+      },
+      "HubHandshake": {
+        "description": "Hub connection handshake message.",
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "deviceToken": {
+            "title": "Devicetoken",
+            "type": "string"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "default": "hub_connect",
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "default": "1.0.0",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hubId",
+          "deviceToken",
+          "timestamp"
+        ],
+        "title": "HubHandshake",
+        "type": "object"
+      },
+      "HubInfo": {
+        "description": "Hub information.",
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "connectedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connectedat"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "lastSeen": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastseen"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "hubId",
+          "connected"
+        ],
+        "title": "HubInfo",
+        "type": "object"
+      },
+      "HubProfile": {
+        "description": "What kind of hub this is, as reported in the handshake.",
+        "properties": {
+          "mode": {
+            "default": "bench",
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "uplink": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uplink"
+          }
+        },
+        "title": "HubProfile",
+        "type": "object"
+      },
+      "HubStatusBroadcast": {
+        "description": "Sent to every browser when a hub connects or disconnects.",
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "hub_status",
+            "default": "hub_status",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "hubId",
+          "connected",
+          "timestamp"
+        ],
+        "title": "HubStatusBroadcast",
+        "type": "object"
+      },
+      "PingMessage": {
+        "properties": {
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "ping",
+            "default": "ping",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "timestamp"
+        ],
+        "title": "PingMessage",
+        "type": "object"
+      },
+      "PongMessage": {
+        "properties": {
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Timestamp"
+          },
+          "type": {
+            "const": "pong",
+            "default": "pong",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "PongMessage",
+        "type": "object"
+      },
+      "PortInfo": {
+        "description": "Port information.",
+        "properties": {
+          "board_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoardProfileInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "port": {
+            "title": "Port",
+            "type": "string"
+          },
+          "port_id": {
+            "title": "Port Id",
+            "type": "string"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "serial_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serial Number"
+          },
+          "vendor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Id"
+          }
+        },
+        "required": [
+          "port_id",
+          "port"
+        ],
+        "title": "PortInfo",
+        "type": "object"
+      },
+      "PortListResponse": {
+        "description": "List of ports.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "ports": {
+            "items": {
+              "$ref": "#/components/schemas/PortInfo"
+            },
+            "title": "Ports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "hubId",
+          "ports",
+          "count"
+        ],
+        "title": "PortListResponse",
+        "type": "object"
+      },
+      "RestartDeviceRequest": {
+        "description": "Request to send restart device command.",
+        "properties": {
+          "portId": {
+            "description": "Target port ID",
+            "title": "Portid",
+            "type": "string"
+          },
+          "priority": {
+            "default": 2,
+            "description": "Command priority",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "portId"
+        ],
+        "title": "RestartDeviceRequest",
+        "type": "object"
+      },
+      "SerialWriteRequest": {
+        "description": "Request to send serial write command.",
+        "properties": {
+          "data": {
+            "description": "Data to write",
+            "title": "Data",
+            "type": "string"
+          },
+          "encoding": {
+            "default": "utf-8",
+            "description": "Data encoding",
+            "title": "Encoding",
+            "type": "string"
+          },
+          "portId": {
+            "description": "Target port ID",
+            "title": "Portid",
+            "type": "string"
+          },
+          "priority": {
+            "default": 5,
+            "description": "Command priority",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "portId",
+          "data"
+        ],
+        "title": "SerialWriteRequest",
+        "type": "object"
+      },
+      "SubscribeMessage": {
+        "properties": {
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceSubscription"
+            },
+            "title": "Subscriptions",
+            "type": "array"
+          },
+          "type": {
+            "const": "subscribe",
+            "default": "subscribe",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscriptions"
+        ],
+        "title": "SubscribeMessage",
+        "type": "object"
+      },
+      "SubscriptionState": {
+        "properties": {
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "portId": {
+            "title": "Portid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "inactive"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hubId",
+          "portId",
+          "status"
+        ],
+        "title": "SubscriptionState",
+        "type": "object"
+      },
+      "SubscriptionStatusMessage": {
+        "properties": {
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionState"
+            },
+            "title": "Subscriptions",
+            "type": "array"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "subscription_status",
+            "default": "subscription_status",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "subscriptions",
+          "timestamp"
+        ],
+        "title": "SubscriptionStatusMessage",
+        "type": "object"
+      },
+      "TaskStatusBroadcast": {
+        "properties": {
+          "commandType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Commandtype"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "portId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portid"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Progress"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "task_status",
+            "default": "task_status",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "hubId",
+          "task_id",
+          "status",
+          "progress",
+          "result",
+          "error",
+          "timestamp",
+          "commandType",
+          "portId"
+        ],
+        "title": "TaskStatusBroadcast",
+        "type": "object"
+      },
+      "TaskStatusMessage": {
+        "description": "Task status update from hub.",
+        "properties": {
+          "commandType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Commandtype"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "portId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portid"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Progress"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "taskId": {
+            "title": "Taskid",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "default": "task_status",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hubId",
+          "timestamp",
+          "taskId",
+          "status"
+        ],
+        "title": "TaskStatusMessage",
+        "type": "object"
+      },
+      "TaskStatusResponse": {
+        "description": "Task status response.",
+        "properties": {
+          "command_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command Type"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "hub_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hub Id"
+          },
+          "port_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port Id"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "status",
+          "timestamp"
+        ],
+        "title": "TaskStatusResponse",
+        "type": "object"
+      },
+      "TelemetryEntry": {
+        "description": "Telemetry data entry.",
+        "properties": {
+          "data": {
+            "title": "Data",
+            "type": "string"
+          },
+          "dataSizeBytes": {
+            "title": "Datasizebytes",
+            "type": "integer"
+          },
+          "portId": {
+            "title": "Portid",
+            "type": "string"
+          },
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timestamp",
+          "portId",
+          "sessionId",
+          "data",
+          "dataSizeBytes"
+        ],
+        "title": "TelemetryEntry",
+        "type": "object"
+      },
+      "TelemetryListResponse": {
+        "description": "List of telemetry entries.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "telemetry": {
+            "items": {
+              "$ref": "#/components/schemas/TelemetryEntry"
+            },
+            "title": "Telemetry",
+            "type": "array"
+          },
+          "totalBytes": {
+            "title": "Totalbytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hubId",
+          "telemetry",
+          "count",
+          "totalBytes"
+        ],
+        "title": "TelemetryListResponse",
+        "type": "object"
+      },
+      "TelemetryMessage": {
+        "description": "Telemetry data from hub.",
+        "properties": {
+          "data": {
+            "title": "Data",
+            "type": "string"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "portId": {
+            "title": "Portid",
+            "type": "string"
+          },
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "default": "telemetry",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hubId",
+          "timestamp",
+          "portId",
+          "sessionId",
+          "data"
+        ],
+        "title": "TelemetryMessage",
+        "type": "object"
+      },
+      "TelemetryStreamMessage": {
+        "properties": {
+          "data": {
+            "title": "Data",
+            "type": "string"
+          },
+          "dataSizeBytes": {
+            "title": "Datasizebytes",
+            "type": "integer"
+          },
+          "hubId": {
+            "title": "Hubid",
+            "type": "string"
+          },
+          "portId": {
+            "title": "Portid",
+            "type": "string"
+          },
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "type": {
+            "const": "telemetry_stream",
+            "default": "telemetry_stream",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "hubId",
+          "portId",
+          "sessionId",
+          "timestamp",
+          "data",
+          "dataSizeBytes"
+        ],
+        "title": "TelemetryStreamMessage",
+        "type": "object"
+      },
+      "TokenResponse": {
+        "description": "JWT token response.",
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token"
+        ],
+        "title": "TokenResponse",
+        "type": "object"
+      },
+      "UnsubscribeMessage": {
+        "properties": {
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceSubscription"
+            },
+            "title": "Subscriptions",
+            "type": "array"
+          },
+          "type": {
+            "const": "unsubscribe",
+            "default": "unsubscribe",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscriptions"
+        ],
+        "title": "UnsubscribeMessage",
+        "type": "object"
+      },
+      "UserInfo": {
+        "description": "User information.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "UserInfo",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/auth/login"
+          }
+        },
+        "type": "oauth2"
+      }
+    }
+  },
+  "info": {
+    "description": "Cloud service for testing rpi-hub-service WebSocket communication",
+    "title": "RPi Hub Cloud Service",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "description": "Root endpoint.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Root"
+      }
+    },
+    "/api/hubs": {
+      "get": {
+        "description": "List every configured hub (from DEVICE_TOKENS) plus any hub seen since startup,\nwith its connection state.",
+        "operationId": "list_hubs_api_hubs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HubInfo"
+                  },
+                  "title": "Response List Hubs Api Hubs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Hubs",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/api/hubs/{hub_id}": {
+      "get": {
+        "description": "Get hub details.",
+        "operationId": "get_hub_api_hubs__hub_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "title": "Hub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Hub",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/api/hubs/{hub_id}/commands/close": {
+      "post": {
+        "description": "Send close connection command to hub.",
+        "operationId": "send_close_connection_command_api_hubs__hub_id__commands_close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "title": "Hub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseConnectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Send Close Connection Command",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/api/hubs/{hub_id}/commands/flash": {
+      "post": {
+        "description": "Send flash firmware command to hub.",
+        "operationId": "send_flash_firmware_command_api_hubs__hub_id__commands_flash_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "title": "Hub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlashFirmwareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Send Flash Firmware Command",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/api/hubs/{hub_id}/commands/restart": {
+      "post": {
+        "description": "Send restart device command to hub.",
+        "operationId": "send_restart_device_command_api_hubs__hub_id__commands_restart_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "title": "Hub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestartDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Send Restart Device Command",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/api/hubs/{hub_id}/commands/write": {
+      "post": {
+        "description": "Send serial write command to hub.",
+        "operationId": "send_serial_write_command_api_hubs__hub_id__commands_write_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "title": "Hub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SerialWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Send Serial Write Command",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/api/hubs/{hub_id}/connections": {
+      "get": {
+        "description": "Get open serial connections for a hub. Offline hubs report none.",
+        "operationId": "get_connections_api_hubs__hub_id__connections_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "title": "Hub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Connections",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/api/hubs/{hub_id}/ports": {
+      "get": {
+        "description": "Get ports for a hub. Offline hubs report no ports.",
+        "operationId": "get_ports_api_hubs__hub_id__ports_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "title": "Hub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Ports",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/api/hubs/{hub_id}/telemetry": {
+      "get": {
+        "description": "Get recent telemetry for a hub (kept after the hub disconnects).",
+        "operationId": "get_telemetry_api_hubs__hub_id__telemetry_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "title": "Hub Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Telemetry",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "Login with NetID and the team password.\n\nAccepts either JSON {\"username\": \"..\", \"password\": \"..\"} or form data (x-www-form-urlencoded).\n\nReturns JWT access token.",
+        "operationId": "login_auth_login_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/auth/login-viewer": {
+      "post": {
+        "description": "Login as a viewer with read-only access.\n\nReturns JWT access token with viewer role.",
+        "operationId": "login_viewer_auth_login_viewer_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Login Viewer",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "description": "Get current user information.",
+        "operationId": "get_me_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Me",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Health check endpoint.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    }
+  },
+  "x-websocket-messages": {
+    "client_to_cloud": [
+      "SubscribeMessage",
+      "UnsubscribeMessage",
+      "PongMessage"
+    ],
+    "cloud_to_client": [
+      "ConnectedMessage",
+      "PingMessage",
+      "TelemetryStreamMessage",
+      "HealthBroadcast",
+      "DeviceEventBroadcast",
+      "TaskStatusBroadcast",
+      "SubscriptionStatusMessage",
+      "HubStatusBroadcast"
+    ],
+    "cloud_to_hub": [
+      "HubConnectedAck",
+      "CommandEnvelope"
+    ],
+    "hub_to_cloud": [
+      "HubHandshake",
+      "TelemetryMessage",
+      "HealthMessage",
+      "DeviceEventMessage",
+      "TaskStatusMessage"
+    ]
+  }
+}

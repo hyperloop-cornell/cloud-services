@@ -60,11 +60,13 @@ async def health():
 
 
 @app.websocket("/hub")
+@app.websocket("/api/device/ws/uplink")
 async def hub_websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for RPi hub connections.
-    
-    Hubs connect here with device token authentication.
+
+    Hubs connect here with device token authentication. `/api/device/ws/uplink` is the
+    same endpoint under the name used by the system design documents.
     """
     await handle_hub_connection(websocket)
 

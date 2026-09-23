@@ -31,12 +31,19 @@ app = main.app
 
 
 @pytest.fixture(autouse=True)
-def reset_rate_limiter():
+def reset_state():
+    """Give every test a fresh store, broadcaster and rate limiter."""
     from src.auth.rate_limit import login_rate_limiter
+    from src.storage import memory_store
+    from src.websocket.broadcaster import broadcaster
 
     login_rate_limiter.clear()
+    memory_store._store = None
+    broadcaster.clients.clear()
     yield
     login_rate_limiter.clear()
+    memory_store._store = None
+    broadcaster.clients.clear()
 
 
 @pytest.fixture
