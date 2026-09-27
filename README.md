@@ -1,139 +1,74 @@
-# RPi Hub Cloud Service
+# Cloud Service
 
-FastAPI cloud service for testing rpi-hub-service WebSocket communication.
+FastAPI backend for the Hyperloop telemetry GUI. It exposes the REST API and WebSocket endpoints that
+browsers and Raspberry Pi hubs connect to.
 
-FastAPI is responsible for establishing both REST API and WebSocket endpoints on the cloud backend. 
-
-
-## Features
-
-- WebSocket hub connection endpoint (`/hub`)
-- JWT authentication for API endpoints
-- Device token authentication for hub connections
-- In-memory storage for testing
-- REST API for triggering commands and viewing telemetry
-- Full bidirectional messaging with hub service
+- Hubs connect over `WS /hub` and authenticate with a per-hub device token.
+- Browsers log in with a NetID and the shared team password, then use JWT bearer tokens for REST and
+  `WS /ws/client?token=...` for live telemetry.
+- State is kept in memory (`src/storage/memory_store.py`) and resets on restart.
 
 ## Quick Start
-
-### Installation
 
 ```bash
 cd cloud-services
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-### Configuration
-
-```bash
 cp .env.example .env
-# Edit .env with your settings
-```
-
-### Run Server
-
-```bash
 uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-Server will be available at `http://localhost:8080`
+API docs: `http://localhost:8080/docs`
 
-API documentation at `http://localhost:8080/docs`
+With the defaults in `.env.example` (development), log in as NetID `dev` with password `hyperloop-dev`,
+and hubs can connect with `dev-token-rpi-bridge-01` / `dev-token-rpi-bridge-02`. None of these
+fallbacks work when `ENVIRONMENT=production`; the service refuses to start until real values are set.
+
+## Authentication
+
+- `POST /auth/login` - NetID + team password (JSON or form). Returns a JWT with role `operator`.
+  The NetID must be on the allowlist (`ALLOWED_NETIDS` and/or `ALLOWED_NETIDS_FILE`).
+  Failed attempts are rate limited per NetID and per client IP (HTTP 429 with `Retry-After`).
+- `POST /auth/login-viewer` - No credentials. Returns a JWT with role `viewer` (read-only).
+- `GET /auth/me` - Current user (`username`, `email`, `role`).
+
+Only `operator` tokens can send hub commands; viewers get HTTP 403. Removing a NetID from the allowlist
+revokes that person's existing sessions.
+
+Production setup, password rotation and hub token generation: `.claude/auth-setup.md` in the
+hyperloop-gui repository.
 
 ## API Endpoints
 
-### Authentication
-- `POST /auth/login` - Login with username/password, get JWT token
-      Extracts username and password from the request sent by the client (json or form)
-      Logs that it has received the credentials and authenticates it
-      logs error for error in username
-      otherwise, generates a JWT token 
-- `GET /auth/me` - Get current user info
-      returns current user's username, email ID, and full name
-
 ### Hubs
-Manages connected hardware hubs
-Reads device state from the memory store.
-A physical hub device must have already connected to your server and registered itself into the memory store.
-
-
-- `GET /api/hubs` - List connected hubs
-      An authenticated client requests the list
-
-- `GET /api/hubs/{hubId}` - Get hub details
-      if the hub doesnt exist, it raises an error.
-
-- `GET /api/hubs/{hubId}/telemetry` - Get telemetry data
-- `POST /api/hubs/{hubId}/commands/write` - Send serial write command
-   A hub is essentially a device with multiple ports, where each port represents a physical connection point (like a serial port). Commands are sent to a port on a hub, and telemetry data is recorded from a port on a hub.
-
-- `POST /api/hubs/{hubId}/commands/flash` - Send flash firmware command
-- `POST /api/hubs/{hubId}/commands/restart` - Send restart device command
+- `GET /api/hubs` - List hubs
+- `GET /api/hubs/{hubId}` - Hub details
+- `GET /api/hubs/{hubId}/telemetry` - Recent telemetry
+- `GET /api/hubs/{hubId}/ports` - Detected serial ports
+- `GET /api/hubs/{hubId}/connections` - Open serial connections
+- `POST /api/hubs/{hubId}/commands/write` - Serial write (operator only)
+- `POST /api/hubs/{hubId}/commands/flash` - Flash firmware (operator only)
+- `POST /api/hubs/{hubId}/commands/restart` - Restart device (operator only)
+- `POST /api/hubs/{hubId}/commands/close` - Close connection (operator only)
 
 ### WebSocket
-- `WS /hub` - Hub connection endpoint (device token auth)
+- `WS /hub` - Hub connection (device token handshake)
+- `WS /ws/client?token=<jwt>` - Browser telemetry stream (subscribe/unsubscribe by hub + port)
 
-   Client endpoint: 
-      manages browser/client WebSocket connections to the backend
-      Each connected browser gets a ClientConnection
-      they're subscribed to (which hub+port combinations they want live data from)
+## Testing with rpi-hub-server
 
-   hub endpoint: 
-      manages hub websocket connections to the backend
-      
-## Testing with rpi-hub-service
-
-1. Start this cloud service:
-   ```bash
-   uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
-   ```
-
-2. Configure rpi-hub-service `.env`:
+1. Start this service (see Quick Start).
+2. In `rpi-hub-server/.env`:
    ```env
+   HUB_ID=rpi-bridge-01
    SERVER_ENDPOINT=ws://localhost:8080/hub
    DEVICE_TOKEN=dev-token-rpi-bridge-01
    ```
+3. Start the hub: `uvicorn src.main:app --host 127.0.0.1 --port 8000`
 
-3. Start rpi-hub-service:
-   ```bash
-   cd ../rpi-hub-service
-   uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
-   ```
+## Tests
 
-## Mock Users
-
-- Username: `admin`, Password: `<your password>`
-- Username: `developer`, Password: `<your password>`
-- `GET /api/hubs/{hubId}/telemetry` - Get telemetry data
-- `POST /api/hubs/{hubId}/commands/write` - Send serial write command
-- `POST /api/hubs/{hubId}/commands/flash` - Send flash firmware command
-- `POST /api/hubs/{hubId}/commands/restart` - Send restart device command
-
-### WebSocket
-- `WS /hub` - Hub connection endpoint (device token auth)
-
-## Testing with rpi-hub-service
-
-1. Start this cloud service:
-   ```bash
-   uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
-   ```
-
-2. Configure rpi-hub-service `.env`:
-   ```env
-   SERVER_ENDPOINT=ws://localhost:8080/hub
-   DEVICE_TOKEN=dev-token-rpi-bridge-01
-   ```
-
-3. Start rpi-hub-service:
-   ```bash
-   cd ../rpi-hub-service
-   uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
-   ```
-
-## Mock Users
-
-- Username: `admin`, Password: `<your password>`
-- Username: `developer`, Password: `<your password>`
+```bash
+pytest tests/ -v
+```

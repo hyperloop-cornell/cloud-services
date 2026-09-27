@@ -48,8 +48,8 @@ async def handle_hub_connection(websocket: WebSocket):
         # Wait for handshake
         logger.info("Waiting for handshake message...")
         handshake_data = await websocket.receive_text()
-        logger.info(f"Received handshake: {handshake_data}")
         handshake_dict = json.loads(handshake_data)
+        logger.info(f"Received handshake from hub {handshake_dict.get('hubId')!r}")
 
         # Validate handshake
         try:

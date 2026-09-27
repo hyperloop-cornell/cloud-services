@@ -22,7 +22,7 @@ from ..models import (
     CommandResponse,
     TaskStatusResponse,
 )
-from ..auth.dependencies import get_current_user
+from ..auth.dependencies import get_current_user, require_operator
 from ..storage.memory_store import get_store
 from ..services.command_service import send_command_to_hub
 
@@ -187,7 +187,7 @@ async def get_connections(
 async def send_serial_write_command(
     hub_id: str,
     request: SerialWriteRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_operator),
 ):
     """
     Send serial write command to hub.
@@ -235,7 +235,7 @@ async def send_serial_write_command(
 async def send_flash_firmware_command(
     hub_id: str,
     request: FlashFirmwareRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_operator),
 ):
     """
     Send flash firmware command to hub.
@@ -283,7 +283,7 @@ async def send_flash_firmware_command(
 async def send_restart_device_command(
     hub_id: str,
     request: RestartDeviceRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_operator),
 ):
     """
     Send restart device command to hub.
@@ -328,7 +328,7 @@ async def send_restart_device_command(
 async def send_close_connection_command(
     hub_id: str,
     request: CloseConnectionRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_operator),
 ):
     """
     Send close connection command to hub.
@@ -359,11 +359,11 @@ async def send_close_connection_command(
             status_code=500, detail="Failed to send command to hub"
         )
 
-        return TaskStatusResponse(
-            task_id=command_id,
-            status="pending",
-            progress=None,
-            result=None,
-            error=None,
-            timestamp=datetime.utcnow(),
-        )
+    return TaskStatusResponse(
+        task_id=command_id,
+        status="pending",
+        progress=None,
+        result=None,
+        error=None,
+        timestamp=datetime.utcnow(),
+    )

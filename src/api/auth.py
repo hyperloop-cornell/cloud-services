@@ -1,69 +1,92 @@
 """Authentication API endpoints."""
 
 import logging
-from datetime import timedelta
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 
 from ..models import TokenResponse, UserInfo
-from ..auth.auth_service import authenticate_user, create_access_token
+from ..auth.auth_service import (
+    ROLE_OPERATOR,
+    ROLE_VIEWER,
+    VIEWER_SUBJECT,
+    authenticate_user,
+    create_access_token,
+)
 from ..auth.dependencies import get_current_user
-from ..config import get_settings
+from ..auth.rate_limit import login_rate_limiter
+from ..config import get_settings, normalize_netid
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
+def _client_ip(request: Request) -> str:
+    settings = get_settings()
+    if settings.trust_proxy_headers:
+        forwarded = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _raise_if_limited(ip_key: str, netid_key: str) -> None:
+    settings = get_settings()
+    window = settings.login_failure_window_seconds
+    retry_after = max(
+        login_rate_limiter.retry_after(ip_key, settings.login_max_failures_per_ip, window) or 0,
+        login_rate_limiter.retry_after(netid_key, settings.login_max_failures_per_netid, window) or 0,
+    )
+    if retry_after:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(request: Request):
     """
-    Login with username and password.
+    Login with NetID and the team password.
 
     Accepts either JSON {"username": "..", "password": ".."} or form data (x-www-form-urlencoded).
 
     Returns JWT access token.
     """
-    # Try parsing JSON payload first
-    username = None
-    password = None
-
     content_type = request.headers.get("content-type", "")
     if content_type.startswith("application/json"):
         body = await request.json()
-        username = body.get("username")
-        password = body.get("password")
     else:
-        form = await request.form()
-        username = form.get("username")
-        password = form.get("password")
+        body = await request.form()
+    username = body.get("username")
+    password = body.get("password")
 
-    logger.info(f"[LOGIN] Received login request for username: {username}")
-
-    if not username or not password:
-        logger.error("[LOGIN] Missing username or password in request")
+    if not username or not password or not isinstance(username, str) or not isinstance(password, str):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username and password are required",
+            detail="NetID and password are required",
         )
 
-    user = authenticate_user(username, password)
+    netid = normalize_netid(username)
+    ip_key = f"ip:{_client_ip(request)}"
+    netid_key = f"netid:{netid}"
+    _raise_if_limited(ip_key, netid_key)
 
+    user = authenticate_user(netid, password)
     if not user:
-        logger.error(f"[LOGIN] Authentication failed for username: {username}")
+        login_rate_limiter.record_failure(ip_key)
+        login_rate_limiter.record_failure(netid_key)
+        logger.warning(f"[LOGIN] Failed login for netid={netid}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect NetID or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    logger.info(f"[LOGIN] Authentication successful for username: {username}")
+    login_rate_limiter.reset(netid_key)
+    logger.info(f"[LOGIN] Successful login for netid={netid}")
 
-    settings = get_settings()
-    access_token_expires = timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    access_token = create_access_token(
-        data={"sub": user["username"]}, expires_delta=access_token_expires
-    )
-
+    access_token = create_access_token(data={"sub": user["username"], "role": ROLE_OPERATOR})
     return TokenResponse(access_token=access_token, token_type="bearer")
 
 
@@ -71,21 +94,10 @@ async def login(request: Request):
 async def login_viewer():
     """
     Login as a viewer with read-only access.
-    
+
     Returns JWT access token with viewer role.
     """
-    logger.info("[LOGIN] Viewer login requested")
-
-    settings = get_settings()
-    access_token_expires = timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    
-    # Create token with viewer role embedded in payload
-    access_token = create_access_token(
-        data={"sub": "viewer", "role": "viewer"}, 
-        expires_delta=access_token_expires
-    )
-
-    logger.info("[LOGIN] Viewer token created successfully")
+    access_token = create_access_token(data={"sub": VIEWER_SUBJECT, "role": ROLE_VIEWER})
     return TokenResponse(access_token=access_token, token_type="bearer")
 
 

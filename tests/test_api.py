@@ -1,43 +1,75 @@
-"""Pytest-compatible API tests for cloud-services.
+"""API tests for cloud-services hub routes."""
 
-These use the `client` fixture defined in `tests/conftest.py` so tests
-run without requiring an externally running server or the `requests` package.
-"""
+import pytest
+
+from conftest import HUB_ID
+from src.storage.memory_store import get_store
+
+COMMAND_BODIES = {
+    "write": {"portId": "port-1", "data": "hello"},
+    "flash": {"portId": "port-1", "firmwareData": "dm9pZCBzZXR1cCgpIHt9", "boardFqbn": "arduino:avr:uno"},
+    "restart": {"portId": "port-1"},
+    "close": {"portId": "port-1"},
+}
+
+
+class FakeHubSocket:
+    def __init__(self):
+        self.sent = []
+
+    async def send_text(self, text):
+        self.sent.append(text)
+
+
+@pytest.fixture
+def connected_hub():
+    import asyncio
+
+    store = get_store()
+    socket = FakeHubSocket()
+    asyncio.run(store.add_hub_connection(HUB_ID, socket, "1.0.0"))
+    yield socket
+    asyncio.run(store.remove_hub_connection(HUB_ID))
 
 
 def test_health_endpoint(client):
     response = client.get("/health")
     assert response.status_code == 200
-    # Basic shape check
-    assert isinstance(response.json(), dict) or response.json() == {}
+    assert isinstance(response.json(), dict)
 
 
-def test_login_and_get_current_user(client):
-    login_data = {"username": "admin", "password": "admin123"}
-    res = client.post("/auth/login", json=login_data)
+def test_list_hubs_requires_auth(client, operator_headers):
+    assert client.get("/api/hubs").status_code in [401, 403]
+    res = client.get("/api/hubs", headers=operator_headers)
     assert res.status_code == 200
-    data = res.json()
-    assert "access_token" in data
-
-    token = data["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    me = client.get("/auth/me", headers=headers)
-    assert me.status_code == 200
-    assert "username" in me.json() or isinstance(me.json(), dict)
+    assert isinstance(res.json(), list)
 
 
-def test_list_hubs_requires_auth(client):
-    # Without auth
-    res = client.get("/api/hubs")
-    assert res.status_code in [401, 403]
+def test_viewer_can_read_hubs(client, viewer_headers):
+    assert client.get("/api/hubs", headers=viewer_headers).status_code == 200
 
-    # With auth
-    login = client.post("/auth/login", json={"username": "admin", "password": "admin123"})
-    if login.status_code == 200:
-        token = login.json()["access_token"]
-        res = client.get("/api/hubs", headers={"Authorization": f"Bearer {token}"})
-        assert res.status_code in [200, 401, 403]
-        if res.status_code == 200:
-            assert isinstance(res.json(), list)
 
+@pytest.mark.parametrize("command", sorted(COMMAND_BODIES))
+def test_commands_reject_viewers(client, viewer_headers, connected_hub, command):
+    res = client.post(f"/api/hubs/{HUB_ID}/commands/{command}", json=COMMAND_BODIES[command], headers=viewer_headers)
+    assert res.status_code == 403
+    assert connected_hub.sent == []
+
+
+@pytest.mark.parametrize("command", sorted(COMMAND_BODIES))
+def test_commands_reject_anonymous(client, command):
+    res = client.post(f"/api/hubs/{HUB_ID}/commands/{command}", json=COMMAND_BODIES[command])
+    assert res.status_code == 401
+
+
+@pytest.mark.parametrize("command", sorted(COMMAND_BODIES))
+def test_commands_sent_for_operators(client, operator_headers, connected_hub, command):
+    res = client.post(f"/api/hubs/{HUB_ID}/commands/{command}", json=COMMAND_BODIES[command], headers=operator_headers)
+    assert res.status_code == 200, res.text
+    assert res.json()["status"] == "pending"
+    assert len(connected_hub.sent) == 1
+
+
+def test_command_to_disconnected_hub_404(client, operator_headers):
+    res = client.post("/api/hubs/rpi-lab-02/commands/write", json=COMMAND_BODIES["write"], headers=operator_headers)
+    assert res.status_code == 404
