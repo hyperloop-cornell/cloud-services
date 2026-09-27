@@ -2,7 +2,7 @@
 
 import asyncio
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -15,6 +15,20 @@ class HubConnection:
     last_seen: datetime
     version: str
     websocket: Any  # WebSocket connection
+    capabilities: List[str] = field(default_factory=list)
+    profile: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class HubRecord:
+    """What is known about a hub, kept after it disconnects."""
+    hub_id: str
+    connected: bool
+    connected_at: Optional[datetime] = None
+    last_seen: Optional[datetime] = None
+    version: Optional[str] = None
+    capabilities: List[str] = field(default_factory=list)
+    profile: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -56,6 +70,7 @@ class PortData:
     serial_number: Optional[str] = None
     vendor_id: Optional[str] = None
     product_id: Optional[str] = None
+    board_profile: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -93,8 +108,11 @@ class MemoryStore:
         self._lock = asyncio.Lock()
         self.max_telemetry_per_hub = max_telemetry_per_hub
 
-        # Hub connections
+        # Live hub connections
         self._hubs: Dict[str, HubConnection] = {}
+
+        # Every hub seen since startup (survives disconnects)
+        self._hub_records: Dict[str, HubRecord] = {}
 
         # Telemetry data (hub_id -> list of entries)
         self._telemetry: Dict[str, List[TelemetryData]] = defaultdict(list)
@@ -116,29 +134,64 @@ class MemoryStore:
 
     # Hub Connection Management
     async def add_hub_connection(
-        self, hub_id: str, websocket: Any, version: str = "1.0.0"
-    ) -> None:
-        """Add hub connection."""
+        self,
+        hub_id: str,
+        websocket: Any,
+        version: str = "1.0.0",
+        capabilities: Optional[List[str]] = None,
+        profile: Optional[Dict[str, Any]] = None,
+    ) -> Optional[HubConnection]:
+        """Register a hub connection. Returns the connection it replaced, if any."""
         async with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
+            previous = self._hubs.get(hub_id)
             self._hubs[hub_id] = HubConnection(
                 hub_id=hub_id,
                 connected_at=now,
                 last_seen=now,
                 version=version,
                 websocket=websocket,
+                capabilities=list(capabilities or []),
+                profile=profile,
             )
+            self._hub_records[hub_id] = HubRecord(
+                hub_id=hub_id,
+                connected=True,
+                connected_at=now,
+                last_seen=now,
+                version=version,
+                capabilities=list(capabilities or []),
+                profile=profile,
+            )
+            return previous
 
-    async def remove_hub_connection(self, hub_id: str) -> None:
-        """Remove hub connection."""
+    async def remove_hub_connection(self, hub_id: str, websocket: Any = None) -> bool:
+        """Remove a hub connection.
+
+        When `websocket` is given, only remove it if it is still the hub's current
+        connection, so a stale handler cannot unregister a newer reconnect.
+        """
         async with self._lock:
-            self._hubs.pop(hub_id, None)
+            current = self._hubs.get(hub_id)
+            if current is None or (websocket is not None and current.websocket is not websocket):
+                return False
+            del self._hubs[hub_id]
+            record = self._hub_records.get(hub_id)
+            if record:
+                record.connected = False
+                record.last_seen = datetime.now(timezone.utc)
+            # Serial sessions do not survive the hub going away
+            self._connections.pop(hub_id, None)
+            return True
 
     async def update_hub_last_seen(self, hub_id: str) -> None:
         """Update hub last seen timestamp."""
         async with self._lock:
+            now = datetime.now(timezone.utc)
             if hub_id in self._hubs:
-                self._hubs[hub_id].last_seen = datetime.utcnow()
+                self._hubs[hub_id].last_seen = now
+            if hub_id in self._hub_records:
+                self._hub_records[hub_id].last_seen = now
 
     async def get_hub_connection(self, hub_id: str) -> Optional[HubConnection]:
         """Get hub connection."""
@@ -150,10 +203,21 @@ class MemoryStore:
         async with self._lock:
             return list(self._hubs.values())
 
+    async def get_hub_records(self) -> Dict[str, HubRecord]:
+        """Every hub seen since startup, connected or not."""
+        async with self._lock:
+            return {hub_id: HubRecord(**vars(record)) for hub_id, record in self._hub_records.items()}
+
     async def is_hub_connected(self, hub_id: str) -> bool:
         """Check if hub is connected."""
         async with self._lock:
             return hub_id in self._hubs
+
+    async def clear_hub_devices(self, hub_id: str) -> None:
+        """Forget cached ports and connections for a hub (it will re-announce them)."""
+        async with self._lock:
+            self._ports.pop(hub_id, None)
+            self._connections.pop(hub_id, None)
 
     # Telemetry Management
     async def add_telemetry(
@@ -167,7 +231,7 @@ class MemoryStore:
         """Add telemetry entry."""
         async with self._lock:
             entry = TelemetryData(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 port_id=port_id,
                 session_id=session_id,
                 data=data,
@@ -213,7 +277,7 @@ class MemoryStore:
         """Update health metrics."""
         async with self._lock:
             self._health[hub_id] = HealthData(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 uptime_seconds=uptime_seconds,
                 system=system,
                 service=service,
@@ -236,7 +300,7 @@ class MemoryStore:
         """Add device event."""
         async with self._lock:
             event = DeviceEvent(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 event_type=event_type,
                 port_id=port_id,
                 device_info=device_info,
@@ -248,17 +312,22 @@ class MemoryStore:
                 port_data = PortData(
                     port_id=port_id,
                     port=device_info.get("port", ""),
-                    description=device_info.get("description"),
+                    description=device_info.get("description") or device_info.get("product"),
                     manufacturer=device_info.get("manufacturer"),
                     serial_number=device_info.get("serial_number"),
                     vendor_id=device_info.get("vendor_id"),
                     product_id=device_info.get("product_id"),
+                    board_profile=device_info.get("board_profile"),
                 )
                 self._ports[hub_id][port_id] = port_data
             
             # Remove from ports cache when device disconnects
             elif event_type == "disconnected":
                 self._ports[hub_id].pop(port_id, None)
+
+            # Keep the event log bounded
+            if len(self._device_events[hub_id]) > self.max_telemetry_per_hub:
+                self._device_events[hub_id] = self._device_events[hub_id][-self.max_telemetry_per_hub :]
 
     async def get_device_events(
         self, hub_id: str, limit: Optional[int] = None
@@ -302,7 +371,7 @@ class MemoryStore:
                 session_id=session_id,
                 bytes_read=bytes_read,
                 bytes_written=bytes_written,
-                connected_at=connected_at or datetime.utcnow(),
+                connected_at=connected_at or datetime.now(timezone.utc),
             )
 
     async def remove_connection(self, hub_id: str, port_id: str) -> None:
@@ -333,7 +402,7 @@ class MemoryStore:
         """Update task status."""
         async with self._lock:
             self._task_status[hub_id][task_id] = TaskStatus(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 task_id=task_id,
                 status=status,
                 progress=progress,

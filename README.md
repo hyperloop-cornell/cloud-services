@@ -42,7 +42,8 @@ hyperloop-gui repository.
 ## API Endpoints
 
 ### Hubs
-- `GET /api/hubs` - List hubs
+- `GET /api/hubs` - List every configured hub (from `DEVICE_TOKENS`) with `connected`, `lastSeen`,
+  `capabilities` and `profile` (offline hubs are included)
 - `GET /api/hubs/{hubId}` - Hub details
 - `GET /api/hubs/{hubId}/telemetry` - Recent telemetry
 - `GET /api/hubs/{hubId}/ports` - Detected serial ports
@@ -53,8 +54,24 @@ hyperloop-gui repository.
 - `POST /api/hubs/{hubId}/commands/close` - Close connection (operator only)
 
 ### WebSocket
-- `WS /hub` - Hub connection (device token handshake)
-- `WS /ws/client?token=<jwt>` - Browser telemetry stream (subscribe/unsubscribe by hub + port)
+- `WS /hub` (alias `WS /api/device/ws/uplink`) - Hub connection (device token handshake)
+- `WS /ws/client?token=<jwt>` - Browser telemetry stream (subscribe/unsubscribe by hub + port).
+  Also carries `health`, `task_status` and `hub_status` (hub online/offline) to every client.
+
+Hubs may add `capabilities` (for example `flash:bin`, `device_snapshot`) and a `profile`
+(`{name, mode, uplink}`) to their handshake. Hubs that send neither are treated as bench hubs that
+accept `.ino`/`.hex` firmware, so older rpi-hub-server versions keep working.
+
+## Contracts
+
+Message and REST models are defined in `src/protocol/bench_v1.py` and `src/models.py`.
+`contracts/openapi.json` is generated from them and consumed by the web client's type generation:
+
+```bash
+python -m src.protocol.export
+```
+
+`tests/test_contracts.py` fails when the committed file is out of date.
 
 ## Testing with rpi-hub-server
 

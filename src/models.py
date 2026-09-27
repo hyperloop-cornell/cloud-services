@@ -1,8 +1,21 @@
 """Pydantic models for API and WebSocket messages."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
+
+# WebSocket message models live in src/protocol/bench_v1.py; re-exported for existing imports
+from .protocol.bench_v1 import (  # noqa: F401
+    BoardProfileInfo,
+    Command,
+    CommandEnvelope,
+    DeviceEventMessage,
+    HealthMessage,
+    HubHandshake,
+    HubProfile,
+    TaskStatusMessage,
+    TelemetryMessage,
+)
 
 
 # Auth Models
@@ -24,76 +37,6 @@ class UserInfo(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
     role: Optional[str] = None
-
-
-# Hub Connection Models
-class HubHandshake(BaseModel):
-    """Hub connection handshake message."""
-    type: str = "hub_connect"
-    hubId: str
-    deviceToken: str
-    timestamp: str
-    version: str = "1.0.0"
-
-
-# WebSocket Message Models
-class TelemetryMessage(BaseModel):
-    """Telemetry data from hub."""
-    type: str = "telemetry"
-    hubId: str
-    timestamp: str
-    portId: str
-    sessionId: str
-    data: str  # Base64 encoded
-
-
-class HealthMessage(BaseModel):
-    """Health metrics from hub."""
-    type: str = "health"
-    hubId: str
-    timestamp: str
-    uptime_seconds: int
-    system: Dict[str, Any]
-    service: Dict[str, Any]
-    errors: Dict[str, Any]
-
-
-class DeviceEventMessage(BaseModel):
-    """Device event from hub."""
-    type: str = "device_event"
-    hubId: str
-    timestamp: str
-    eventType: str  # connected, disconnected
-    portId: str
-    deviceInfo: Optional[Dict[str, Any]] = None
-
-
-class TaskStatusMessage(BaseModel):
-    """Task status update from hub."""
-    type: str = "task_status"
-    hubId: str
-    timestamp: str
-    taskId: str
-    status: str  # completed, failed, running
-    progress: Optional[int] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-
-
-# Command Models
-class CommandEnvelope(BaseModel):
-    """Command envelope sent to hub."""
-    type: str = "command"
-    command: "Command"
-
-
-class Command(BaseModel):
-    """Command details."""
-    commandId: str
-    commandType: str  # serial_write, flash, restart, close_connection
-    portId: str
-    params: Dict[str, Any]
-    priority: int = 5
 
 
 class SerialWriteParams(BaseModel):
@@ -125,8 +68,12 @@ class SerialWriteRequest(BaseModel):
 class FlashFirmwareRequest(BaseModel):
     """Request to send flash firmware command."""
     portId: str = Field(..., description="Target port ID")
-    firmwareData: str = Field(..., description="Base64 encoded .ino source or .hex binary")
+    firmwareData: str = Field(..., description="Base64 encoded firmware (.ino source, .hex, .bin or .elf)")
     boardFqbn: Optional[str] = Field(None, description="Board FQBN (required for .ino source)")
+    artifactFormat: Optional[Literal["ino", "hex", "bin", "elf"]] = Field(
+        None, description="Firmware format; inferred as ino/hex when omitted (older hubs only accept those)"
+    )
+    boardProfile: Optional[str] = Field(None, description="Board profile id from the hub's board registry")
     priority: int = Field(3, ge=1, le=10, description="Command priority")
 
 
@@ -158,6 +105,8 @@ class HubInfo(BaseModel):
     connectedAt: Optional[datetime] = None
     lastSeen: Optional[datetime] = None
     version: Optional[str] = None
+    capabilities: List[str] = Field(default_factory=list)
+    profile: Optional[HubProfile] = None
 
 
 class HubListResponse(BaseModel):
@@ -192,6 +141,7 @@ class PortInfo(BaseModel):
     serial_number: Optional[str] = None
     vendor_id: Optional[str] = None
     product_id: Optional[str] = None
+    board_profile: Optional[BoardProfileInfo] = None
 
 
 class PortListResponse(BaseModel):
@@ -227,3 +177,8 @@ class TaskStatusResponse(BaseModel):
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     timestamp: datetime
+    command_type: Optional[str] = None
+    port_id: Optional[str] = None
+    hub_id: Optional[str] = None
+    priority: Optional[int] = None
+    created_at: Optional[datetime] = None
