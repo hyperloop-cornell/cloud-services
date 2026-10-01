@@ -83,7 +83,9 @@ class Broadcaster:
             client = self.clients.get(connection_id)
             if client is None:
                 return
-            await asyncio.wait_for(client.websocket.send_text(text), timeout=SEND_TIMEOUT_SECONDS)
+            # Not wait_for: on Python 3.11 it swallows a cancellation that arrives as the send completes
+            async with asyncio.timeout(SEND_TIMEOUT_SECONDS):
+                await client.websocket.send_text(text)
 
         results = await asyncio.gather(*(deliver(cid) for cid in connection_ids), return_exceptions=True)
         failed: List[str] = []
